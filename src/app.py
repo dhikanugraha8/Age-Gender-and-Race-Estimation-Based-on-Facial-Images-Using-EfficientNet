@@ -5,8 +5,6 @@ import numpy as np
 from PIL import Image
 import time
 
-# st.set_page_config(page_title="Age Estimation", layout="wide", initial_sidebar_state="auto")
- 
 # Load the model with caching
 @st.cache_resource
 def load_model():
@@ -30,15 +28,16 @@ def detect_and_crop_face(image):
         return None  # Return None if no face is detected
 
 # Prediction function
-# Prediction function
-def predict(image_path):
-    # Load and preprocess the image
-    image = cv2.imread(image_path)
-    face = detect_and_crop_face(image)
+def predict(image):
+    # Convert PIL image to OpenCV format (BGR color space)
+    image = np.array(image)
+    image = cv2.cvtColor(image, cv2.COLOR_RGB2BGR)
     
+    # Detect and crop the face
+    face = detect_and_crop_face(image)
     if face is None:
         return None, None, None, None, None
-    
+
     # Resize and preprocess the cropped face
     face = cv2.resize(face, (224, 224))
     face = tf.keras.applications.efficientnet.preprocess_input(face)
@@ -60,6 +59,7 @@ def predict(image_path):
     race_confidence = np.max(race_pred[0])
 
     return age_pred, gender_pred, gender_confidence, race_pred_label, race_confidence
+
 # Fungsi untuk membuat card metric dengan label di atas dan nilai confidence di bawah
 def create_metric_card(label, value, info=None, color='yellow', width="150px"):
     info_html = f"<div style='font-size: 12px; color: #555;'>{info}</div>" if info else ""
@@ -95,7 +95,6 @@ st.markdown("""
     </style>
 """, unsafe_allow_html=True)
 
-
 # Title and Description
 st.title("Age, Gender, and Race Estimation")
 st.markdown("Upload a facial image, and the model will estimate the age, gender, and race.")
@@ -106,19 +105,13 @@ tabs = st.tabs(["Prediction", "About"])
 # Prediction Page
 with tabs[0]:
     # File uploader for image
-    uploaded_file = st.file_uploader("Choose an image...", type="jpg")
+    uploaded_file = st.file_uploader("Choose an image...", type=["jpg", "jpeg", "png"])
 
     if uploaded_file is not None:
-        # Generate a unique filename using the current timestamp
-        timestamp = int(time.time())  # Current time as timestamp
-        image_path = f"../asset/upload/{timestamp}.jpg"  # Specify a directory if needed
- 
-        # Save uploaded image to a unique file path
-        with open(image_path, "wb") as f:
-            f.write(uploaded_file.getbuffer())
-        
-        # Show the original image
+        # Show the uploaded image
         image = Image.open(uploaded_file)
+        if image.mode == 'RGBA':
+            image = image.convert('RGB')
         col1, col2, col3 = st.columns([1, 3, 1])
         with col2:
             st.image(image, caption="Uploaded Image", use_column_width=True)
@@ -126,9 +119,13 @@ with tabs[0]:
         with colb:    
             # Predict button
             predict_button = st.button("Predict")
+         
         if predict_button:
-            results = predict(image_path)
-            
+            timestamp = int(time.time())
+            image.save(f"../asset/upload/{timestamp}.jpg")
+            # Display a loading spinner while predicting
+            with st.spinner("Processing... Please wait"):
+                results = predict(image)
             # Check if results are None or if any result within the tuple is None
             if results is None or any(r is None for r in results):
                 st.warning("Prediction could not be performed because no face was detected. Please upload a clear image showing the face.")
@@ -147,7 +144,6 @@ with tabs[0]:
                     """,
                     unsafe_allow_html=True
                 )
-
 
 with tabs[1]:
     st.title("About This Project")
